@@ -30,6 +30,17 @@ START_PIECES = {
       ['_', '_', '_']]
 }
 
+COLORS = {
+   'I':(0, 255, 255),
+   'J':(0, 0, 255),
+   'L':(255, 102, 0),
+   'O':(255, 255, 0),
+   'S':(0, 255, 0),
+   'T':(106, 13, 173),
+   'Z':(255, 0, 0),
+   '_':(100, 100, 100)
+}
+
 # 0: I | 1: J, L, S, T, Z | 2: O
 OFFSET_BOOK = {
    0:(((0, 0), (-1, 0), (2, 0), (-1, 0), (+2, 0)),
@@ -40,13 +51,11 @@ OFFSET_BOOK = {
       ((-1, 0), (0, 0), (0, 0), (0, 1), (0, -2)),
       ((-1, 1), (1, 1), (-2, 1), (1, 0), (-2, 0)),
       ((0, 1), (0, 1), (0, 1), (0, -1), (0, 2))),
-   2:(((0, 0), (0, 0)),
-       ((0, -1), (0, -1)),
-       ((-1, -1), (-1, -1)),
-       ((-1, 0), (-1, 0)))
+   2:(((0, 0),),
+      ((0, -1),),
+      ((-1, -1),),
+      ((-1, 0),))
 }
-print(OFFSET_BOOK[1])
-print(OFFSET_BOOK[2])
 class Piece:
    piece_type = 0
    def __init__(self, piece_type):
@@ -69,7 +78,7 @@ class Piece:
          for j in range(len(input_grid[i])):
             # if a filled block in the shape array (not '_')
             # is in the same location as one in the input grid
-            if input_piece[i][j] != '_' and input_piece[i][j] != '_':
+            if input_piece[i][j] != '_' and input_grid[i][j] != '_':
                return True
       # If no collision is found, return false
       return False
@@ -87,22 +96,14 @@ class Field:
 
    def __init__(self, current_piece):
       self.game_grid = [['_' for x in range(10)] for y in range(22)]
-      self.current_piece = current_piece
-      self.piece_x = 0
-      self.piece_y = 0
+      self.current_piece = Piece(current_piece)
+      if current_piece == 0:
+         self.piece_x = 2
+         self.piece_y = -2
+      else:
+         self.piece_x = 3
+         self.piece_y = 0
       self.piece_rot = 0
-
-   # 0: left, 1: right, 2: up, 3: down
-   def move_piece(self, dir, amt):
-      match dir:
-         case 0:
-            self.piece_x -= amt
-         case 1:
-            self.piece_x += amt
-         case 2:
-            self.piece_y -= amt
-         case 3:
-            self.piece_y += amt
    
    def find_area_of_interest(self, x, y, width, height):
       # Grab existing area of playing field
@@ -142,23 +143,77 @@ class Field:
          rotated_piece = self.current_piece.rotate_left()
       elif dir == 1:
          rotated_piece = self.current_piece.rotate_right()
-      for i in rotated_piece:
-         print(i)
-      print('========================================')
-      print(kick_translations)
-      print('========================================')
+      # for i in rotated_piece:
+      #    print(i)
+      # print('========================================')
+      # print(kick_translations)
+      # print('========================================')
       # Test kick translations for collision with filled blocks
       for x_offset, y_offset in kick_translations:
          # Find area of interest for collision checking
          new_spot = self.find_area_of_interest(self.piece_x + x_offset, self.piece_y + y_offset, len(self.current_piece.shape), len(self.current_piece.shape))
-         for i in new_spot:
-            print(i)
+         # for i in new_spot:
+         #    print(i)
          outcome = self.current_piece.check_collision(new_spot, rotated_piece)
-         print(outcome)
-         print('==================================')
+         if not outcome:
+            self.piece_x += x_offset
+            self.piece_y += y_offset
+            self.piece_rot = new_rot
+            self.current_piece.shape = rotated_piece
+            break
+   
+   def move(self, dir_x, dir_y):
+      new_spot = self.find_area_of_interest(self.piece_x + dir_x, self.piece_y + dir_y, len(self.current_piece.shape), len(self.current_piece.shape))
+      collision = self.current_piece.check_collision(new_spot)
+      if not collision:
+         self.piece_x += dir_x
+         self.piece_y += dir_y
+      return collision
 
+   def display(self, x_offset, y_offset):
+      for y, i in enumerate(self.game_grid):
+         for x, j in enumerate(i):
+            pygame.draw.rect(screen, COLORS.get(j), (x * 25 + x_offset, y * 25 + y_offset, 25, 25))
+      for y, i in enumerate(self.current_piece.shape):
+         for x, j in enumerate(i):
+            pygame.draw.rect(screen, COLORS.get(j), ((x + self.piece_x) * 25 + x_offset, (y + self.piece_y) * 25 + y_offset, 25, 25))
+            
 
-test_field = Field(Piece(3))
-test_field.game_grid = [[[x, y] for x in range(10)] for y in range(22)]
-test_field.rotate(1)
-print(test_field.current_piece.offset)
+   
+
+# Main Loop
+running = True
+background = pygame.transform.scale(pygame.image.load('background.jpg'), (1600, 900))
+
+test_field = Field(3)
+
+while running:
+   # Background
+   screen.fill((0, 0, 0))
+   screen.blit(background, (0, 0))
+   # Handle key inputs from the player
+   keys = pygame.key.get_pressed()
+   for event in pygame.event.get():
+      if event.type == pygame.QUIT:
+         running = False
+
+      # if keystroke is pressed check for controls
+      if event.type == pygame.KEYDOWN:
+         if event.key == pygame.K_RIGHT:
+               test_field.move(1, 0)
+         if event.key == pygame.K_LEFT:
+               test_field.move(-1, 0)
+         if event.key == pygame.K_z:
+               test_field.rotate(-1)
+         if event.key == pygame.K_x:
+               test_field.rotate(-1)
+      # if key is released check for left, right, a, or d
+      # if event.type == pygame.KEYUP:
+      #    if (event.key == pygame.K_LEFT or event.key == pygame.K_a) and player.vx < 0:
+      #          player.walk(0)
+      #    if (event.key == pygame.K_RIGHT or event.key == pygame.K_d) and player.vx > 0:
+      #          player.walk(0)
+   test_field.display(558, 134)
+
+   
+   pygame.display.update()
