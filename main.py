@@ -43,17 +43,17 @@ COLORS = {
 
 # 0: I | 1: J, L, S, T, Z | 2: O
 OFFSET_BOOK = {
-   0:(((0, 0), (-1, 0), (2, 0), (-1, 0), (+2, 0)),
-      ((-1, 0), (0, 0), (0, 0), (0, 1), (0, -2)),
-      ((-1, 1), (1, 1), (-2, 1), (1, 0), (-2, 0)),
-      ((0, 1), (0, 1), (0, 1), (0, -1), (0, 2))),
-   1:(((0, 0), (-1, 0), (2, 0), (-1, 0), (2, 0)),
-      ((-1, 0), (0, 0), (0, 0), (0, 1), (0, -2)),
-      ((-1, 1), (1, 1), (-2, 1), (1, 0), (-2, 0)),
-      ((0, 1), (0, 1), (0, 1), (0, -1), (0, 2))),
+   0:(((0, 0), (-1, 0), (2, 0), (-1, 0), (2, 0)),
+      ((-1, 0), (0, 0), (0, 0), (0, -1), (0, 2)),
+      ((-1, -1), (1, -1), (-2, -1), (1, 0), (-2, 0)),
+      ((0, -1), (0, -1), (0, -1), (0, 1), (0, -2))),
+   1:(((0, 0), (0, 0), (0, 0), (0, 0), (0, 0)),
+      ((0, 0), (1, 0), (1, 1), (0, -2), (1, -2)),
+      ((0, 0), (0, 0), (0, 0), (0, 0), (0, 0)),
+      ((0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2))),
    2:(((0, 0),),
-      ((0, -1),),
-      ((-1, -1),),
+      ((0, 1),),
+      ((-1, 1),),
       ((-1, 0),))
 }
 class Piece:
@@ -97,6 +97,7 @@ class Field:
    def __init__(self, current_piece):
       self.game_grid = [['_' for x in range(10)] for y in range(22)]
       self.current_piece = Piece(current_piece)
+      self.offset_amt = (0, 0)
       if current_piece == 0:
          self.piece_x = 2
          self.piece_y = -2
@@ -136,8 +137,12 @@ class Field:
    # -1: left, 1: right
    def rotate(self, dir):
       new_rot = (self.piece_rot + dir) % 4
+      print(self.piece_rot, new_rot)
+      print(OFFSET_BOOK.get(self.current_piece.offset)[self.piece_rot])
+      print(OFFSET_BOOK.get(self.current_piece.offset)[new_rot])
       # Kick translations according to Guideline Tetris SRS
-      kick_translations = [(before[0] - after[0], before[1] - after[1]) for before, after in zip(OFFSET_BOOK.get(self.current_piece.offset)[self.piece_rot], OFFSET_BOOK.get(0)[new_rot])]
+      kick_translations = [(after[0] - before[0], after[1] - before[1]) for before, after in zip(OFFSET_BOOK.get(self.current_piece.offset)[self.piece_rot], OFFSET_BOOK.get(self.current_piece.offset)[new_rot])]
+      print(kick_translations)
       rotated_piece = self.current_piece.shape
       if dir == -1:
          rotated_piece = self.current_piece.rotate_left()
@@ -149,21 +154,23 @@ class Field:
       # print(kick_translations)
       # print('========================================')
       # Test kick translations for collision with filled blocks
-      for x_offset, y_offset in kick_translations:
+      for idx, offsets in enumerate(kick_translations):
+         x_offset, y_offset = offsets
          # Find area of interest for collision checking
-         new_spot = self.find_area_of_interest(self.piece_x + x_offset, self.piece_y + y_offset, len(self.current_piece.shape), len(self.current_piece.shape))
+         new_spot = self.find_area_of_interest(self.piece_x + x_offset + self.offset_amt[0], self.piece_y + y_offset + self.offset_amt[1], len(self.current_piece.shape), len(self.current_piece.shape))
          # for i in new_spot:
          #    print(i)
          outcome = self.current_piece.check_collision(new_spot, rotated_piece)
+         print(outcome)
          if not outcome:
-            self.piece_x += x_offset
-            self.piece_y += y_offset
             self.piece_rot = new_rot
+            self.offset_amt = OFFSET_BOOK.get(self.current_piece.offset)[new_rot][idx]
+            print(self.offset_amt)
             self.current_piece.shape = rotated_piece
             break
    
    def move(self, dir_x, dir_y):
-      new_spot = self.find_area_of_interest(self.piece_x + dir_x, self.piece_y + dir_y, len(self.current_piece.shape), len(self.current_piece.shape))
+      new_spot = self.find_area_of_interest(self.piece_x + dir_x + self.offset_amt[0], self.piece_y + dir_y + self.offset_amt[1], len(self.current_piece.shape), len(self.current_piece.shape))
       collision = self.current_piece.check_collision(new_spot)
       if not collision:
          self.piece_x += dir_x
@@ -173,10 +180,11 @@ class Field:
    def display(self, x_offset, y_offset):
       for y, i in enumerate(self.game_grid):
          for x, j in enumerate(i):
-            pygame.draw.rect(screen, COLORS.get(j), (x * 25 + x_offset, y * 25 + y_offset, 25, 25))
+            pass
+            # pygame.draw.rect(screen, COLORS.get(j), (x * 25 + x_offset, y * 25 + y_offset, 25, 25))
       for y, i in enumerate(self.current_piece.shape):
          for x, j in enumerate(i):
-            pygame.draw.rect(screen, COLORS.get(j), ((x + self.piece_x) * 25 + x_offset, (y + self.piece_y) * 25 + y_offset, 25, 25))
+            pygame.draw.rect(screen, COLORS.get(j), ((x + self.piece_x + self.offset_amt[0]) * 25 + x_offset, (y + self.piece_y + self.offset_amt[1]) * 25 + y_offset, 25, 25))
             
 
    
@@ -206,7 +214,7 @@ while running:
          if event.key == pygame.K_z:
                test_field.rotate(-1)
          if event.key == pygame.K_x:
-               test_field.rotate(-1)
+               test_field.rotate(1)
       # if key is released check for left, right, a, or d
       # if event.type == pygame.KEYUP:
       #    if (event.key == pygame.K_LEFT or event.key == pygame.K_a) and player.vx < 0:
