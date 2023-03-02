@@ -107,6 +107,9 @@ class Field:
       self.held_piece_id = None
       self.time_on_ground = 0
       self.lock_down_stall = 15
+      self.gravity = 1
+      self.counter = 0
+      self.queue = []
    
    def find_area_of_interest(self, x, y, width, height):
       # Grab existing area of playing field
@@ -172,9 +175,23 @@ class Field:
          self.lock_down_stall -= 1
       return collision
 
-   def generate_new_piece(self, piece_id):
-      self.current_piece = Piece(piece_id)
-      if piece_id == 0:
+   def generate_queue(self):
+      options = [0, 1, 2, 3, 4, 5, 6]
+      output = []
+      while len(options) > 0:
+         picked = random.randint(0, len(options) - 1)
+         output.append(options[picked])
+         del options[picked]
+      self.queue += (output)
+
+   def generate_new_piece(self, from_hold):
+      if from_hold and self.held_piece_id:
+         new_piece = self.held_piece_id
+      else:
+         new_piece = self.queue[0]
+         del self.queue[0]
+      self.current_piece = Piece(new_piece)
+      if new_piece == 0:
          self.piece_x = 2
          self.piece_y = 0
       else:
@@ -186,6 +203,9 @@ class Field:
       self.lock_down_stall = 15
       new_spot = self.find_area_of_interest(self.piece_x, self.piece_y, len(self.current_piece.shape), len(self.current_piece.shape))
       piece_invalid = self.current_piece.check_collision(new_spot)
+      if len(self.queue) < 7:
+         self.generate_queue()
+      
       if piece_invalid:
          return False
 
@@ -200,16 +220,21 @@ class Field:
       surface_check = self.find_area_of_interest(self.piece_x, self.piece_y + 1, len(self.current_piece.shape), len(self.current_piece.shape))
       return not self.current_piece.check_collision(surface_check)
 
-   def hard_drop(self, new_piece_id):
+   def hard_drop(self):
       while self.piece_is_floating():
          self.piece_y += 1
       else:
          self.place_piece()
-         self.generate_new_piece(new_piece_id)
+         self.generate_new_piece(False)
          self.clear_filled_rows()
 
    def update_piece_status(self):
-      self.piece_status[0] = self.piece_is_floating
+      if self.time_on_ground >= 30:
+         self.place_piece()
+         self.generate_new_piece(False)
+         self.clear_filled_rows()
+         return 0
+
       if self.piece_is_floating():
          self.time_on_ground = 0
       else:
@@ -222,12 +247,32 @@ class Field:
             counter.append(idx)
       return counter
 
+   def update_gravity(self, magnitude = 1):
+      speed = (0.8-((self.gravity)*0.007))**(self.gravity-1)
+      if self.piece_is_floating():
+         self.counter += 1/60 * magnitude
+      else:
+         self.counter = 0
+
+      while self.counter > speed and self.piece_is_floating():
+         self.piece_y += 1
+         self.counter -= speed
+      
    def clear_filled_rows(self):
       rows_to_del = self.find_filled_rows()
       for i in rows_to_del:
          del self.game_grid[i]
          self.game_grid.insert(0, ['_' for x in range(10)])
       return len(rows_to_del)
+
+   def hold(self):
+      temp = self.current_piece.piece_type
+      if self.held_piece_id:
+         self.generate_new_piece(True)
+         self.held_piece_id = temp
+      else:
+         self.generate_new_piece(True)
+         self.held_piece_id = temp
 
    def display(self, x_offset, y_offset):
       for y, i in enumerate(self.game_grid):
@@ -238,6 +283,18 @@ class Field:
          for x, j in enumerate(i):
             if j != '_':
                pygame.draw.rect(screen, COLORS.get(j), ((x + self.piece_x) * 25 + x_offset, (y + self.piece_y) * 25 + y_offset, 25, 25))
+      pygame.draw.rect(screen, (150, 150, 150), (260 + x_offset, 0 + y_offset, 125, 395))
+      for k in range(5):
+         queue_piece = START_PIECES.get(self.queue[k])
+         for y, i in enumerate(queue_piece):
+            for x, j in enumerate(i):
+               if j != '_':
+                  if self.queue[k] == 0:
+                     pygame.draw.rect(screen, COLORS.get(j), (x * 25 + x_offset + 250, (y + 3*k) * 25 + y_offset, 25, 25))
+                  else:
+                     pygame.draw.rect(screen, COLORS.get(j), (x * 25 + x_offset + 275, (y + 3*k) * 25 + y_offset + 25, 25, 25))
+
+
             
 
    
@@ -245,8 +302,12 @@ class Field:
 # Main Loop
 running = True
 background = pygame.transform.scale(pygame.image.load('background.jpg'), (1600, 900))
-
+soft_drop = False
+move_left = False
+move_right = False
+das_counter = 0
 test_field = Field(2)
+test_field.generate_queue()
 test_field.game_grid = [
 ['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
 ['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
@@ -270,6 +331,7 @@ test_field.game_grid = [
 ['T', '_', '_', 'T', '_', '_', '_', '_', '_', '_'],
 ['_', '_', '_', 'T', '_', '_', '_', '_', '_', '_'],
 ['_', 'T', 'T', 'T', '_', '_', '_', '_', '_', '_']]
+
 while running:
    # Background
    screen.fill((0, 0, 0))
@@ -284,25 +346,51 @@ while running:
       # if keystroke is pressed check for controls
       if event.type == pygame.KEYDOWN:
          if event.key == pygame.K_RIGHT:
-               test_field.move(1, 0)
+            test_field.move(1, 0)
+            move_right = True
          if event.key == pygame.K_LEFT:
-               test_field.move(-1, 0)
+            test_field.move(-1, 0)
+            move_left = True
          if event.key == pygame.K_DOWN:
-               test_field.move(0, 1)
+            soft_drop = True
          if event.key == pygame.K_UP:
-               test_field.move(0, -1)
-         if event.key == pygame.K_SPACE:
-               test_field.hard_drop(random.randint(0, 6))
+            test_field.hard_drop()
          if event.key == pygame.K_z:
-               test_field.rotate(-1)
+            test_field.rotate(-1)
          if event.key == pygame.K_x:
-               test_field.rotate(1)
-      # if key is released check for left, right, a, or d
-      # if event.type == pygame.KEYUP:
-      #    if (event.key == pygame.K_LEFT or event.key == pygame.K_a) and player.vx < 0:
-      #          player.walk(0)
-      #    if (event.key == pygame.K_RIGHT or event.key == pygame.K_d) and player.vx > 0:
-      #          player.walk(0)
+            test_field.rotate(1)
+         if event.key == pygame.K_c:
+            test_field.hold()
+         if event.key == pygame.K_e:
+            test_field.gravity += 1
+         if event.key == pygame.K_q:
+            test_field.gravity -= 1
+      
+      if event.type == pygame.KEYUP:
+         if event.key == pygame.K_RIGHT:
+            move_right = False
+            if not move_left:
+               das_counter = 0
+         if event.key == pygame.K_LEFT:
+            move_left = False
+            if not move_right:
+               das_counter = 0
+         if event.key == pygame.K_DOWN:
+            soft_drop = False
+
+   if move_left or move_right:
+      das_counter += 1
+
+   if das_counter > 8 and das_counter % 2 == 1:
+      if move_left:
+         test_field.move(-1, 0)
+      if move_right:
+         test_field.move(1, 0)
+
+   test_field.update_piece_status()
+   if soft_drop:
+      test_field.update_gravity(20)
+   test_field.update_gravity()
    test_field.display(558, 134)
 
    
