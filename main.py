@@ -16,7 +16,7 @@ START_PIECES = {
       ['_', '_', '_']],
    2:[['_', '_', 'L'],
       ['L', 'L', 'L'],
-      ['_', '_', '_']],
+      ['_', '_', '_']], 
    3:[['_', 'O', 'O'],
       ['_', 'O', 'O'],
       ['_', '_', '_']],
@@ -96,7 +96,7 @@ class Field:
 
    def __init__(self, current_piece):
       self.game_grid = [['_' for x in range(10)] for y in range(22)]
-      self.current_piece = Piece(current_piece)
+      self.current_piece = Piece(1)
       if current_piece == 0:
          self.piece_x = 2
          self.piece_y = 0
@@ -109,7 +109,7 @@ class Field:
       self.lock_down_stall = 15
       self.gravity = 1
       self.counter = 0
-      self.queue = []
+      self.queue = [3, 2, 5, 6, 4, 0]
    
    def find_area_of_interest(self, x, y, width, height):
       # Grab existing area of playing field
@@ -185,7 +185,7 @@ class Field:
       self.queue += (output)
 
    def generate_new_piece(self, from_hold):
-      if from_hold and self.held_piece_id:
+      if from_hold:
          new_piece = self.held_piece_id
       else:
          new_piece = self.queue[0]
@@ -198,7 +198,6 @@ class Field:
          self.piece_x = 3
          self.piece_y = 2
       self.piece_rot = 0
-      self.held_piece_id = None
       self.time_on_ground = 0
       self.lock_down_stall = 15
       new_spot = self.find_area_of_interest(self.piece_x, self.piece_y, len(self.current_piece.shape), len(self.current_piece.shape))
@@ -215,9 +214,13 @@ class Field:
             if 0 <= self.piece_x + x <= len(self.game_grid[0]) and 0 <= self.piece_y + y <= len(self.game_grid) and j != '_':
                self.game_grid[self.piece_y + y][self.piece_x + x] = j
 
-   def piece_is_floating(self):
+   def piece_is_floating(self, extra=0):
+      if extra:
+         pass
+      else:
+         extra = 0
       # If the piece undergoes a collision if it is one block lower, then it is not floating
-      surface_check = self.find_area_of_interest(self.piece_x, self.piece_y + 1, len(self.current_piece.shape), len(self.current_piece.shape))
+      surface_check = self.find_area_of_interest(self.piece_x, self.piece_y + 1 + extra, len(self.current_piece.shape), len(self.current_piece.shape))
       return not self.current_piece.check_collision(surface_check)
 
    def hard_drop(self):
@@ -267,32 +270,49 @@ class Field:
 
    def hold(self):
       temp = self.current_piece.piece_type
-      if self.held_piece_id:
-         self.generate_new_piece(True)
-         self.held_piece_id = temp
+      if self.held_piece_id == None:
+         self.generate_new_piece(False)
       else:
          self.generate_new_piece(True)
-         self.held_piece_id = temp
+      self.held_piece_id = temp
 
    def display(self, x_offset, y_offset):
+      pygame.draw.rect(screen, (0, 0, 0), (-11 + x_offset, -11 + y_offset, 263, 575))
       for y, i in enumerate(self.game_grid):
          for x, j in enumerate(i):
             # pass
-            pygame.draw.rect(screen, COLORS.get(j), (x * 25 + x_offset, y * 25 + y_offset, 25, 25))
+            pygame.draw.rect(screen, COLORS.get(j), (x * 26 + x_offset - 9, y * 26 + y_offset - 9, 25, 25))
+      height_diff = 0
+      while self.piece_is_floating(height_diff):
+         height_diff += 1
+      else:
+         for y, i in enumerate(self.current_piece.shape):
+            for x, j in enumerate(i):
+               if j != '_':
+                  pygame.draw.rect(screen, (80, 80, 80), ((x + self.piece_x) * 26 + x_offset - 9, (y + self.piece_y + height_diff) * 26 + y_offset - 9, 25, 25))
       for y, i in enumerate(self.current_piece.shape):
          for x, j in enumerate(i):
             if j != '_':
-               pygame.draw.rect(screen, COLORS.get(j), ((x + self.piece_x) * 25 + x_offset, (y + self.piece_y) * 25 + y_offset, 25, 25))
-      pygame.draw.rect(screen, (150, 150, 150), (260 + x_offset, 0 + y_offset, 125, 395))
+               pygame.draw.rect(screen, COLORS.get(j), ((x + self.piece_x) * 26 + x_offset - 9, (y + self.piece_y) * 26 + y_offset - 9, 25, 25))
+      pygame.draw.rect(screen, (150, 150, 150), (280 + x_offset, -11 + y_offset, 125, 395))
+      pygame.draw.rect(screen, (150, 150, 150), (-141 + x_offset, 4 + y_offset, 120, 80))
+      if self.held_piece_id or self.held_piece_id == 0:
+         for y, i in enumerate(START_PIECES.get(self.held_piece_id)):
+            for x, j in enumerate(i):
+               if j != '_':
+                  if self.held_piece_id != 0:
+                     pygame.draw.rect(screen, COLORS.get(j), (x * 25 + x_offset - 106, y * 25 + y_offset + 14, 25, 25))
+                  else:
+                     pygame.draw.rect(screen, COLORS.get(j), (x * 25 + x_offset - 156, y * 25 + y_offset - 11, 25, 25))
       for k in range(5):
          queue_piece = START_PIECES.get(self.queue[k])
          for y, i in enumerate(queue_piece):
             for x, j in enumerate(i):
                if j != '_':
                   if self.queue[k] == 0:
-                     pygame.draw.rect(screen, COLORS.get(j), (x * 25 + x_offset + 250, (y + 3*k) * 25 + y_offset, 25, 25))
+                     pygame.draw.rect(screen, COLORS.get(j), (x * 25 + x_offset + 270, (y + 3*k) * 25 + y_offset - 11, 25, 25))
                   else:
-                     pygame.draw.rect(screen, COLORS.get(j), (x * 25 + x_offset + 275, (y + 3*k) * 25 + y_offset + 25, 25, 25))
+                     pygame.draw.rect(screen, COLORS.get(j), (x * 25 + x_offset + 295, (y + 3*k) * 25 + y_offset + 14, 25, 25))
 
 
             
@@ -308,29 +328,6 @@ move_right = False
 das_counter = 0
 test_field = Field(2)
 test_field.generate_queue()
-test_field.game_grid = [
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', '_', '_', '_', '_', '_', '_', '_'],
-['T', '_', '_', 'T', '_', '_', '_', '_', '_', '_'],
-['T', '_', '_', 'T', '_', '_', '_', '_', '_', '_'],
-['_', '_', '_', 'T', '_', '_', '_', '_', '_', '_'],
-['_', 'T', 'T', 'T', '_', '_', '_', '_', '_', '_']]
 
 while running:
    # Background
