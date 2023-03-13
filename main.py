@@ -110,6 +110,7 @@ class Field:
       self.gravity = 1
       self.counter = 0
       self.queue = [3, 2, 5, 6, 4, 0]
+      self.lines_cleared = 0
    
    def find_area_of_interest(self, x, y, width, height):
       # Grab existing area of playing field
@@ -266,6 +267,9 @@ class Field:
       for i in rows_to_del:
          del self.game_grid[i]
          self.game_grid.insert(0, ['_' for x in range(10)])
+         self.lines_cleared += 1
+         if self.lines_cleared % 10 == 0:
+            self.gravity += 1
       return len(rows_to_del)
 
    def hold(self):
